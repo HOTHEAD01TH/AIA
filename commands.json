@@ -1,0 +1,21 @@
+{
+    "lights_on": {
+        "device": "lights",
+        "action": "on",
+        "location": "living_room"
+    },
+    "lights_off": {
+        "device": "lights",
+        "action": "off",
+        "location": "living_room"
+    },
+    "set_temperature": {
+        "device": "thermostat",
+        "action": "set",
+        "value": 22
+    },
+    "arm_security": {
+        "device": "security",
+        "action": "arm"
+    }
+}
