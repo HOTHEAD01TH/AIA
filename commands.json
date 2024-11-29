@@ -17,5 +17,13 @@
     "arm_security": {
         "device": "security",
         "action": "arm"
+    },
+    "open_browser": {
+        "action": "browser",
+        "url": "google.com"
+    },
+    "open_notepad": {
+        "action": "notepad",
+        "content": ""
     }
 }
