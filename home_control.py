@@ -1,9 +1,31 @@
 class HomeController:
     def __init__(self):
         self.devices = {
-            'lights': {'living_room': False, 'bedroom': False, 'kitchen': False},
-            'thermostat': {'temperature': 20, 'mode': 'auto'},
-            'security': {'armed': False, 'cameras': True}
+            'lights': {
+                'living_room': False, 
+                'bedroom': False, 
+                'kitchen': False,
+                'bathroom': False,
+                'office': False
+            },
+            'thermostat': {
+                'temperature': 20, 
+                'mode': 'auto',
+                'humidity': 45,
+                'fan': 'auto'
+            },
+            'security': {
+                'armed': False, 
+                'cameras': True,
+                'motion_sensors': True,
+                'door_locks': True
+            },
+            'entertainment': {
+                'tv': False,
+                'music': False,
+                'volume': 50,
+                'current_app': None
+            }
         }
     
     async def execute_command(self, command):

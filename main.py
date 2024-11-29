@@ -35,45 +35,77 @@ class AIA:
         self.system_controller = SystemController()
 
     def load_commands(self):
-        with open('AIA/commands.json', 'r') as f:
-            self.commands = json.load(f)
+        # Try multiple possible locations for commands.json
+        possible_paths = [
+            'commands.json',  # Same directory
+            'AIA/commands.json',  # AIA subdirectory
+            '../commands.json',  # Parent directory
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    self.commands = json.load(f)
+                return
+                
+        raise FileNotFoundError("Could not find commands.json in any expected location")
 
     async def process_command(self, user_input):
         # Generate response using Gemini
-        response = self.model.generate_content(
-            f"""You are a friendly female AI assistant named AIA. You can:
-            1. Control smart home devices
-            2. Open web browsers with specific URLs
-            3. Open notepad and write content
+        prompt = f"""You are AIA, an advanced AI assistant that can:
+            1. Control smart home devices:
+               - Lights (on/off in any room)
+               - Thermostat (set temperature, change mode)
+               - Security system (arm/disarm, check cameras)
+               - Smart appliances (TV, music, etc.)
+            2. Web browser actions:
+               - Open websites
+               - Search information
+               - Check weather
+               - Play videos
+               - Access news
+            3. Create and edit content
             
             Previous context: {self.conversation_history}
-            User says: {user_input}. 
+            User says: {user_input}
             
-            Determine if this is a system command (browser/notepad) or a regular conversation.
-            Provide a natural response and indicate any actions needed."""
-        )
+            Respond naturally and include specific actions in your response:
+            - For devices, mention the exact device and action
+            - For browser, include the URL or search term
+            - Keep responses concise but helpful
+            """
         
-        # Check for system commands
+        response = self.model.generate_content(prompt)
         text = response.text.lower()
-        if 'open browser' in text or 'go to' in text:
-            url = self.extract_url(text)
-            if url:
-                await self.system_controller.open_browser(url)
-                
-        if 'notepad' in text:
-            content = self.extract_content(text)
-            await self.system_controller.open_notepad(content)
-            
-        # Store conversation for context
+        
+        # Handle smart device commands
+        if any(device in text for device in ['lights', 'thermostat', 'security', 'camera', 'tv']):
+            intent = self.parse_intent(text)
+            if intent in self.commands:
+                await self.home_controller.execute_command(self.commands[intent])
+        
+        # Enhanced browser handling
+        if any(action in text.lower() for action in ['search', 'open browser', 'go to', 'watch', 'play', 'show']):
+            # Handle image searches
+            if 'image' in text.lower() or 'images' in text.lower():
+                search_query = text.lower().replace('show me', '').replace('search for', '').replace('images', '').replace('image', '').strip()
+                await self.system_controller.open_browser(f'https://www.google.com/search?q={search_query}&tbm=isch')
+            # Handle website URLs
+            elif 'open' in text.lower() and ('website' in text.lower() or 'site' in text.lower()):
+                website = text.lower().replace('open', '').replace('website', '').replace('site', '').strip()
+                if 'acertinity' in website:
+                    await self.system_controller.open_browser('https://acertinity.com')
+                else:
+                    # Add more specific website mappings here
+                    await self.system_controller.open_browser(f'https://www.{website}.com')
+            # Handle general searches
+            else:
+                search_query = self.extract_search_query(text)
+                if search_query:
+                    await self.system_controller.open_browser(f'https://www.google.com/search?q={search_query}')
+        
+        # Store conversation and return response
         self.conversation_history += f"\nUser: {user_input}\nAIA: {response.text}\n"
-        
-        # Parse the intent silently
-        intent = self.parse_intent(response.text)
-        
-        # Execute command if needed
-        if intent in self.commands:
-            await self.home_controller.execute_command(self.commands[intent])
-            
         return response.text
 
     def parse_intent(self, ai_response):
@@ -94,33 +126,58 @@ class AIA:
                 return word
         return None
         
-    def extract_content(self, text):
-        # Basic content extraction - can be enhanced
-        if 'write' in text:
-            start = text.find('write') + 5
-            return text[start:].strip()
+    def extract_search_query(self, text):
+        # Extract search terms after "search for" or "look up"
+        search_indicators = ['search for', 'look up', 'find', 'search']
+        for indicator in search_indicators:
+            if indicator in text:
+                query = text.split(indicator, 1)[1].strip()
+                return query.replace(' ', '+')
         return None
 
     async def run(self):
-        greeting = "Hello! I'm your Advanced Intelligent Assistant. How can I help?"
-        print(f"AIA: {greeting}")
-        await self.speaker.speak(greeting)
-        
-        while True:
-            # Listen for voice input or accept text input
-            user_input = await self.speech_recognizer.listen()
+        try:
+            greeting = "Hello! I'm your Advanced Intelligent Assistant. How can I help?"
+            print(f"AIA: {greeting}")
+            await self.speaker.speak(greeting)
             
-            if user_input.lower() == "exit":
-                break
-                
-            # Process the command
-            response = await self.process_command(user_input)
-            
-            # Speak and display the response
-            print(f"AIA: {response}")
-            await self.speaker.speak(response)
+            while True:
+                try:
+                    # Listen for voice input or accept text input
+                    user_input = await self.speech_recognizer.listen()
+                    
+                    if user_input.lower() in ["exit", "quit", "bye"]:
+                        print("AIA: Goodbye! Have a great day!")
+                        await self.speaker.speak("Goodbye! Have a great day!")
+                        return  # Gracefully exit the loop
+                        
+                    # Process the command
+                    response = await self.process_command(user_input)
+                    
+                    # Speak and display the response
+                    print(f"AIA: {response}")
+                    await self.speaker.speak(response)
+                    
+                except Exception as e:
+                    print(f"Error in main loop: {e}")
+                    
+        except KeyboardInterrupt:
+            print("\nAIA: Shutting down gracefully...")
+        finally:
+            # Cleanup code
+            if hasattr(self, 'speaker'):
+                self.speaker.engine.stop()
+            print("AIA: Goodbye!")
 
 if __name__ == "__main__":
     import asyncio
-    assistant = AIA()
-    asyncio.run(assistant.run())
+    try:
+        assistant = AIA()
+        asyncio.run(assistant.run())
+    except KeyboardInterrupt:
+        print("\nProgram terminated by user")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        # Ensure proper cleanup
+        print("Shutting down...")
